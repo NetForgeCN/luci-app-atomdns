@@ -1,13 +1,87 @@
 include $(TOPDIR)/rules.mk
 
-LUCI_TITLE:=AtomDNS WebUI Control
-LUCI_DEPENDS:=+atomdns
-LUCI_PKGARCH:=all
+PKG_NAME:=luci-app-atomdns
+PKG_VERSION:=0.6.6
+PKG_RELEASE:=1
+PKG_LICENSE:=GPL-3.0-only
+PKG_MAINTAINER:=NetForgeCN <lonelysoul@users.noreply.github.com>
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
 
-include $(TOPDIR)/feeds/luci/luci.mk
+# ---------------------------------------------------------------------------
+# AtomDNS 主程序打包（原独立 atomdns 包已并入本包，装一个 ipk 即全部功能）
+# 官方发布包：https://github.com/jasonxtt/atomdns/releases/tag/v$(PKG_VERSION)
+# 直接用 musl 静态二进制，避免在 OpenWrt 上自建 Rust 工具链。
+# ---------------------------------------------------------------------------
+ATOMDNS_RELEASE_URL:=https://github.com/jasonxtt/atomdns/releases/download/v$(PKG_VERSION)
+ATOMDNS_CONF_FILE:=config_rust.zip
+ATOMDNS_CONF_HASH:=88a6332d83ebbe81d01ffcbd622b4afc3901689913a4dca327665ab1e0b0f84b
 
+# 按架构选择二进制变体：x86_64 / arm64 / armv7（均为 musl 静态版）
+# 注：官方 amd64-v3 是 glibc 动态链接，与 OpenWrt 的 musl 环境不兼容，故不用。
+ifeq ($(ARCH),x86_64)
+  ATOMDNS_BIN_VARIANT:=amd64-musl
+  ATOMDNS_BIN_HASH:=5ec815c111a934712061a438e0f6b35e520bcdba4ea6b1ab44b479989843d395
+else ifneq ($(findstring aarch64,$(ARCH)),)
+  ATOMDNS_BIN_VARIANT:=arm64
+  ATOMDNS_BIN_HASH:=6be933694e98b40249853b74e8954f1f35e178d4073e9768329ce82cadcc328b
+else ifneq ($(findstring arm,$(ARCH)),)
+  ATOMDNS_BIN_VARIANT:=armv7
+  ATOMDNS_BIN_HASH:=a1e0208ff4516712d9b01ad71b2369a266a6a6acabb5140583de5a542e025859
+else
+  ATOMDNS_BIN_VARIANT:=amd64-musl
+  ATOMDNS_BIN_HASH:=5ec815c111a934712061a438e0f6b35e520bcdba4ea6b1ab44b479989843d395
+endif
+
+ATOMDNS_BIN_FILE:=atomdns-linux-$(ATOMDNS_BIN_VARIANT).tar.gz
+
+# 两个下载源都交给 OpenWrt 下载框架校验（必须在 include luci.mk 之前定义）
+define Download/atomdns-bin
+  FILE:=$(ATOMDNS_BIN_FILE)
+  URL:=$(ATOMDNS_RELEASE_URL)/$(ATOMDNS_BIN_FILE)
+  HASH:=$(ATOMDNS_BIN_HASH)
+endef
+$(eval $(call Download,atomdns-bin))
+
+define Download/atomdns-conf
+  FILE:=$(ATOMDNS_CONF_FILE)
+  URL:=$(ATOMDNS_RELEASE_URL)/$(ATOMDNS_CONF_FILE)
+  HASH:=$(ATOMDNS_CONF_HASH)
+endef
+$(eval $(call Download,atomdns-conf))
+
+# LuCI 元数据：主程序已在本包内，不再依赖 +atomdns。
+# 本包含架构相关二进制，故 LUCI_PKGARCH 留空（不设 all，走目标架构）。
+LUCI_TITLE:=AtomDNS - Rust DNS splitter with WebUI and LuCI control
+LUCI_DEPENDS:=+ca-certificates
+LUCI_PKGARCH:=
+
+# 以下 define 必须在 include luci.mk 之前：luci.mk 在 include 时会 eval BuildPackage，
+# 之后定义的 description / conffiles / Build/Prepare 钩子都不会被读取。
 define Package/$(PKG_NAME)/description
- AtomDNS 控制面板：查看运行状态与版本、配置 DNS/WebUI 端口，并提供一键打开内置 WebUI 的按钮。
+ AtomDNS 是 MosDNS 的 Rust 重写版，单静态二进制，支持国内外 DNS 分流、FakeIP、
+ 路由学习、乐观缓存、DoH/DoT、SRS/geosite 规则与内置 WebUI。
+ 本包整合主程序二进制、默认配置、WebUI 与 LuCI 控制面板，装一个 ipk 即可用。
+ 默认 DNS 监听 2053（避开 dnsmasq 的 53）、WebUI 9099，安装后默认不启用。
 endef
 
-$(call BuildPackage,$(PKG_NAME))
+define Package/$(PKG_NAME)/conffiles
+/etc/config/atomdns
+endef
+
+# 钩子名写死为包名：LUCI_NAME 要到 include luci.mk 时才定义，此处用 $(LUCI_NAME) 会展开为空。
+# luci.mk 的 Build/Prepare 在复制完 root/ 后调用本钩子（luci.mk line 213），
+# 借此把官方二进制与配置包解压进打包路径，随后由 luci.mk 的 install 统一安装。
+define Build/Prepare/luci-app-atomdns
+	$(INSTALL_DIR) $(PKG_BUILD_DIR)/root/usr/bin
+	$(INSTALL_DIR) $(PKG_BUILD_DIR)/root/usr/share/atomdns
+	$(TAR) -xzf $(DL_DIR)/$(ATOMDNS_BIN_FILE) -C $(PKG_BUILD_DIR)/root/usr/bin
+	(cd $(PKG_BUILD_DIR)/root/usr/share/atomdns && unzip -oq $(DL_DIR)/$(ATOMDNS_CONF_FILE))
+	chmod 0755 $(PKG_BUILD_DIR)/root/usr/bin/atomdns
+	# 脚本可执行位兜底：经 GitHub API 推送的脚本会被压成 644，打包阶段纠正
+	chmod 0755 $(PKG_BUILD_DIR)/root/etc/init.d/atomdns
+	chmod 0755 $(PKG_BUILD_DIR)/root/etc/uci-defaults/99-atomdns
+	chmod 0755 $(PKG_BUILD_DIR)/root/usr/libexec/rpcd/atomdns
+endef
+
+# luci.mk 会在末尾对 LUCI_BUILD_PACKAGES 执行 BuildPackage，无需再次调用。
+include $(TOPDIR)/feeds/luci/luci.mk
