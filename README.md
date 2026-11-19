@@ -257,6 +257,23 @@ AtomDNS 内置 WebUI 只提供明文 HTTP（`api.http`，默认 `0.0.0.0:9099`�
 
 x86_64 使用官方 `amd64-musl` 静态版（零依赖，适配 OpenWrt 的 musl 环境）。官方另有 `amd64-v3`（AVX2）变体，但它是 **glibc 动态链接**（解释器 `/lib64/ld-linux-x86-64.so.2`），与 OpenWrt 的 musl 不兼容，故不采用。如需自编译 musl + AVX2 版本可另行处理。
 
+## "保留配置"升级固件时配置丢失
+
+OpenWrt 的 sysupgrade 靠两份清单决定备份什么：包声明的 **conffiles**（只追踪安装时就存在的文件），以及 `/etc/sysupgrade.conf` + `/lib/upgrade/keep.d/*`（用 `find` 展开，会递归收目录下所有运行时生成的文件）。
+
+AtomDNS 的数据目录 `/etc/atomdns/`（含 `config_custom.yaml`、订阅规则 `srs/` `adguard/`、缓存、学习数据）是**首次启动时才生成**的，不在 conffiles 追踪范围内。以前只在 conffiles 里声明了 `/etc/config/atomdns`（UCI 开关/端口），所以"保留配置"升级后 UCI 设置还在，但整个数据目录被丢弃——规则、订阅、缓存全没了，等于恢复出厂。
+
+修复：新增 `root/lib/upgrade/keep.d/luci-app-atomdns`，内容就一行 `/etc/atomdns`。这与官方 `luci-theme-footstrap` 保留运行时上传文件的做法一致。两份清单现在互补：
+
+| 清单 | 覆盖内容 | 机制 |
+|---|---|---|
+| conffiles `/etc/config/atomdns` | UCI 配置（启用开关、端口、目录路径） | opkg 追踪 checksum |
+| keep.d `/etc/atomdns` | 数据目录（config_custom.yaml、订阅规则、缓存、学习数据） | sysupgrade `find` 递归展开 |
+
+自检：在路由器上跑 `sysupgrade -l | grep atomdns`，应同时列出 `/etc/config/atomdns` 和 `/etc/atomdns/` 下的文件；若只有前者说明 keep.d 没装进去。
+
+> 若把 `config_dir` 改成了 `/etc/atomdns` 以外的路径，需自行把新路径加进 `/lib/upgrade/keep.d/luci-app-atomdns`，否则新目录不会被保留。
+
 ## 注意事项
 
 - **在线更新**：AtomDNS 内置 WebUI 一键更新。musl 二进制更新时会继续下载 musl 变体（`wants_musl()` 判断），不会被替换成 glibc 版；arm 平台上更新功能自动关闭。不过固件自带的版本升级仍建议通过重新编译本包完成，以保证校验值一致。
