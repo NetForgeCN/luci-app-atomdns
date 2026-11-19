@@ -16,18 +16,27 @@ ATOMDNS_RELEASE_URL:=https://github.com/jasonxtt/atomdns/releases/download/v$(PK
 ATOMDNS_CONF_FILE:=config_rust.zip
 ATOMDNS_CONF_HASH:=88a6332d83ebbe81d01ffcbd622b4afc3901689913a4dca327665ab1e0b0f84b
 
-# 按架构选择二进制变体：x86_64 / arm64 / armv7（均为 musl 静态版）
+# 按架构选择二进制变体：x86_64 / arm64 / armv7（官方仅提供这三个 musl 静态版）
 # 注：官方 amd64-v3 是 glibc 动态链接，与 OpenWrt 的 musl 环境不兼容，故不用。
+# 不支持的架构（mips / armv5 / armv6 等）在编译阶段直接报错，避免静默打入错误二进制。
+ATOMDNS_ARCH_UNSUPPORTED:=0
+
 ifeq ($(ARCH),x86_64)
   ATOMDNS_BIN_VARIANT:=amd64-musl
   ATOMDNS_BIN_HASH:=5ec815c111a934712061a438e0f6b35e520bcdba4ea6b1ab44b479989843d395
-else ifneq ($(findstring aarch64,$(ARCH)),)
+else ifneq ($(filter aarch64%,$(ARCH)),)
   ATOMDNS_BIN_VARIANT:=arm64
   ATOMDNS_BIN_HASH:=6be933694e98b40249853b74e8954f1f35e178d4073e9768329ce82cadcc328b
-else ifneq ($(findstring arm,$(ARCH)),)
+else ifneq ($(filter arm%,$(ARCH)),)
   ATOMDNS_BIN_VARIANT:=armv7
   ATOMDNS_BIN_HASH:=a1e0208ff4516712d9b01ad71b2369a266a6a6acabb5140583de5a542e025859
+  # 官方 armv7 包要求 ARMv7 指令集，armv5/armv6 目标（如 BCM2835、ARM926）跑不了
+  ifneq ($(filter arm_arm1176jzf-s_vfp arm_arm1136jf-s arm_arm926ej-s arm_xscale arm_fa526,$(CPU_TYPE)),)
+    ATOMDNS_ARCH_UNSUPPORTED:=1
+  endif
 else
+  # 占位值仅用于让 download 阶段可解析；实际编译会在 Build/Prepare 中止
+  ATOMDNS_ARCH_UNSUPPORTED:=1
   ATOMDNS_BIN_VARIANT:=amd64-musl
   ATOMDNS_BIN_HASH:=5ec815c111a934712061a438e0f6b35e520bcdba4ea6b1ab44b479989843d395
 endif
@@ -72,6 +81,7 @@ endef
 # luci.mk 的 Build/Prepare 在复制完 root/ 后调用本钩子（luci.mk line 213），
 # 借此把官方二进制与配置包解压进打包路径，随后由 luci.mk 的 install 统一安装。
 define Build/Prepare/luci-app-atomdns
+	$(if $(filter 1,$(ATOMDNS_ARCH_UNSUPPORTED)),$(error luci-app-atomdns: 不支持的架构 ARCH=$(ARCH) CPU_TYPE=$(CPU_TYPE)，官方仅提供 x86_64 / arm64 / armv7 的 musl 静态二进制),)
 	$(INSTALL_DIR) $(PKG_BUILD_DIR)/root/usr/bin
 	$(INSTALL_DIR) $(PKG_BUILD_DIR)/root/usr/share/atomdns
 	$(TAR) -xzf $(DL_DIR)/$(ATOMDNS_BIN_FILE) -C $(PKG_BUILD_DIR)/root/usr/bin
