@@ -95,3 +95,13 @@ endef
 
 # luci.mk 会在末尾对 LUCI_BUILD_PACKAGES 执行 BuildPackage，无需再次调用。
 include $(TOPDIR)/feeds/luci/luci.mk
+
+# ---------------------------------------------------------------------------
+# 下面这一行「注释」不能删，它不是给人看的说明，而是 buildroot 的扫描标记。
+# include/scan.mk 用
+#   grep 'call BuildPackage'（还有 Build/DefaultTargets 等）
+# 判断某个 Makefile 是否为一个包；扫不到就静默跳过，不进 menuconfig、也不报错。
+# 本包的 BuildPackage 在 luci.mk 里 eval，正文中不含该关键字，因此必须手写此行。
+# 官方 luci 包的 Makefile 末尾同样有这一行，原因完全相同。
+# call BuildPackage - OpenWrt buildroot signature
+# ---------------------------------------------------------------------------

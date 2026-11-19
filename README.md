@@ -26,17 +26,21 @@ AtomDNS 是 [jasonxtt/atomdns](https://github.com/jasonxtt/atomdns)（Rust 重�
 
 ## 目录结构
 
+仓库根目录**不是**包目录：包本体放在 `luci-app-atomdns/` 子目录里，这是 OpenWrt feed 的硬性要求（原因见下文「为什么包必须放在子目录」）。
+
 ```
-luci-app-atomdns/
-├── Makefile                                           # 下载校验 + 打包 + luci.mk
-├── htdocs/.../view/atomdns/status.js                  # LuCI 视图
-└── root/
-    ├── etc/config/atomdns                             # UCI 配置（conffile）
-    ├── etc/init.d/atomdns                             # procd 启动脚本
-    ├── etc/uci-defaults/99-atomdns                    # UCI 默认值 + rpcd 权限兜底
-    ├── usr/libexec/rpcd/atomdns                       # ubus 方法：status / restart
-    ├── usr/share/luci/menu.d/luci-app-atomdns.json    # 服务 → AtomDNS 菜单
-    └── usr/share/rpcd/acl.d/luci-app-atomdns.json     # 访问控制
+<repo>/
+├── README.md
+└── luci-app-atomdns/                                  # 包目录（feed 扫描的单位）
+    ├── Makefile                                       # 下载校验 + 打包 + luci.mk
+    ├── htdocs/.../view/atomdns/status.js              # LuCI 视图
+    └── root/
+        ├── etc/config/atomdns                         # UCI 配置（conffile）
+        ├── etc/init.d/atomdns                         # procd 启动脚本
+        ├── etc/uci-defaults/99-atomdns                # UCI 默认值 + rpcd 权限兜底
+        ├── usr/libexec/rpcd/atomdns                   # ubus 方法：status / restart
+        ├── usr/share/luci/menu.d/luci-app-atomdns.json    # 服务 → AtomDNS 菜单
+        └── usr/share/rpcd/acl.d/luci-app-atomdns.json     # 访问控制
 ```
 
 > 二进制与官方配置包不在仓库内，编译时由 Makefile 从官方 Release 下载并校验 SHA256 后打包进 ipk。
@@ -57,16 +61,18 @@ sed -i '/^src-git luci-app-atomdns /d' feeds.conf.default
 
 echo 'src-git atomdns https://github.com/NetForgeCN/luci-app-atomdns.git' >> feeds.conf.default
 
-./scripts/feeds update atomdns
-./scripts/feeds install -a -p atomdns
+./scripts/feeds update atomdns      # 只负责拉源码 + 生成索引，不做安装
+./scripts/feeds install luci-app-atomdns   # 这一步才会把包链进 package/feeds/
 ```
+
+> ⚠️ **`feeds update` 不等于 `feeds install`**：`update` 只把仓库拉到 `feeds/atomdns/` 并生成 `feeds/atomdns.index`；`make menuconfig` 扫的是 `package/` 目录树，必须再 `install` 才会生成 `package/feeds/atomdns/luci-app-atomdns` 这个软链。只 update 不 install，menuconfig 里必然看不到，而且**不会有任何报错**。
 
 > ⚠️ **feed 短名不能含 `-`**：`scripts/feeds` 用 `(\w+)` 解析 feeds.conf 的 name 段（类型段才是 `([\w\-]+)`），所以 `src-git luci-app-atomdns ...` 会直接报 `Syntax error in feeds.conf.default`。包名 `luci-app-atomdns` 本身带横线没问题——feed 名和包名是两回事。
 
 `make menuconfig` 选中 `LuCI` → `Applications` → `luci-app-atomdns`，然后编译：
 
 ```sh
-# 单包编译（feed 装进来的包路径带 feed 名）
+# 单包编译（路径是 package/feeds/<feed 名>/<包目录名>，这里两者恰好都叫 atomdns 系）
 make package/feeds/atomdns/luci-app-atomdns/compile V=s
 
 # 或者整体编译
@@ -74,6 +80,43 @@ make -j$(nproc)
 ```
 
 产物在 `bin/packages/<arch>/`（luci 子目录下），用 `opkg install` 安装单个 ipk 即可。装完进 **LuCI → 服务 → AtomDNS** 启用。
+
+## 为什么 menuconfig 里找不到（两个静默坑）
+
+`scripts/feeds` + `include/scan.mk` 有两个不报错、只静默跳过的地方，历史上都踩过：
+
+**1) Makefile 里必须出现 `call BuildPackage` 字样**
+
+`include/scan.mk` 收集包用的是：
+
+```sh
+find -L <SCAN_DIR> -mindepth 1 -maxdepth 5 -name Makefile \
+  | xargs grep -aHE 'call (Build/DefaultTargets|BuildPackage|BuildContainer|BuildCompose|KernelPackage)'
+```
+
+grep **只看 Makefile 文件本身，不看它 include 进来的 luci.mk**。本包的 BuildPackage 在 `luci.mk` 末尾 eval，正文原本没有这个关键字，于是被当成「不是包的普通 Makefile」整条丢弃。修复方式是末尾保留这一行注释（官方 luci 包也有，纯扫描标记）：
+
+```make
+# call BuildPackage - OpenWrt buildroot signature
+```
+
+**2) 包必须在 feed 根目录的下一级子目录里**
+
+上面那条管线的路径处理是 `sed 's#^<SCAN_DIR>/##' -e 's#/Makefile:.*##'`，它依赖「feed 根 → 包目录 → Makefile」这种至少两级的结构。如果包直接摊在仓库根（`feeds/atomdns/Makefile`），`-mindepth 1` 仍会找到它，但 sed 剥掉前缀后剩下的是 `Makefile:12:...`，最后拼成 `feeds/atomdns/Makefile:12:.../Makefile` 这种不存在的路径，索引里就成了垃圾条目。所以包必须放在 `luci-app-atomdns/` 子目录下。
+
+**3) 索引过期**
+
+改完 feeds.conf 或仓库结构后，建议连带重建索引：
+
+```sh
+rm -f feeds/atomdns.index feeds/atomdns.tmp/.packageinfo
+./scripts/feeds update atomdns
+./scripts/feeds install -f luci-app-atomdns
+```
+
+若之前在 `package/feeds/atomdns/` 下留下过错乱的软链，先 `./scripts/feeds uninstall atomdns` 再 install。
+
+**自检**：`grep -c 'Package: luci-app-atomdns' feeds/atomdns.index` 返回 ≥1 就说明索引正常，menuconfig 一定能看到。
 
 ## 使用
 
