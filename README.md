@@ -49,6 +49,7 @@ AtomDNS 是 [jasonxtt/atomdns](https://github.com/jasonxtt/atomdns)（Rust 重�
 
 - 构建主机需装 `unzip`（OpenWrt 官方 prereq 列表已包含；`tools/` 里只提供 `zip`，不提供 `unzip`），用于解压官方 `config_rust.zip`。
 - 需要编译树中已安装 `feeds/luci`（本包 `include $(TOPDIR)/feeds/luci/luci.mk`）。
+- 两个外部文件（`atomdns-linux-<arch>.tar.gz`、`config_rust.zip`）通过 `Download/` 定义挂在 `$(STAMP_PREPARED)` 上，`make .../compile` 会自动下载并校验 SHA256；想提前拉可以用 `make package/feeds/atomdns/luci-app-atomdns/download`。
 - 仅支持 **x86_64 / aarch64 / armv7** 目标；其他架构（mips、armv5/armv6 等）在编译阶段直接报错，不会静默打进错误的二进制。
 
 ## 安装
@@ -117,6 +118,24 @@ rm -f feeds/atomdns.index feeds/atomdns.tmp/.packageinfo
 若之前在 `package/feeds/atomdns/` 下留下过错乱的软链，先 `./scripts/feeds uninstall atomdns` 再 install。
 
 **自检**：`grep -c 'Package: luci-app-atomdns' feeds/atomdns.index` 返回 ≥1 就说明索引正常，menuconfig 一定能看到。
+
+## 编译时报 `tar: Cannot open: No such file or directory`
+
+```
+tar (child): /home/wrt/openwrt/dl/atomdns-linux-amd64-musl.tar.gz: Cannot open: No such file or directory
+```
+
+不是下载失败，而是**压根没有生成下载规则**。`Download/xxx` 只是数据定义，真正生成规则的是 `$(eval $(call Download,xxx))`；而 `Download` 宏来自 `download.mk`（由 `package.mk` 引入，`package.mk` 又在 `luci.mk` 里才被 include），宏未定义时 `$(call Download,x)` 展开为空串，`$(eval )` 就是空操作——静默无效，prepare 阶段自然没有文件。
+
+所以本包的两行 eval 放在**文件末尾 `include $(TOPDIR)/feeds/luci/luci.mk` 之后**：只有那时 `Download` 宏和 `$(STAMP_PREPARED)` 才存在，才能展开出
+
+```make
+$(STAMP_PREPARED): $(DL_DIR)/atomdns-linux-<arch>.tar.gz $(DL_DIR)/config_rust.zip
+```
+
+（`Download/xxx` 的 **define 可以在前面**，**eval 必须在后面**——`Package/description`、`conffiles`、`Build/Prepare` 这些则是 define 也必须在前面，两类别搞混。）
+
+验证方式：`make package/feeds/atomdns/luci-app-atomdns/download V=s` 应看到下载两个文件；或直接 `ls dl/atomdns-* dl/config_rust.zip`。
 
 ## 使用
 

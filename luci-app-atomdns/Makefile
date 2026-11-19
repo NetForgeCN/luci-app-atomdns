@@ -43,20 +43,24 @@ endif
 
 ATOMDNS_BIN_FILE:=atomdns-linux-$(ATOMDNS_BIN_VARIANT).tar.gz
 
-# 两个下载源都交给 OpenWrt 下载框架校验（必须在 include luci.mk 之前定义）
+# 两个下载源交给 OpenWrt 下载框架（HASH 由 download.pl 在下载时校验）。
+#
+# 这里只「定义」数据，千万不要在这里 $(eval $(call Download,...))：
+# download.mk 里的 Download 宏此时尚未被 include（它由 package.mk 引入，package.mk 又在
+# luci.mk 里），宏未定义时 $(call Download,x) 展开为空串，$(eval ) 等于空操作，
+# 结果就是「一条下载规则都没生成」——编译时 prepare 直接 tar 找不到 dl/ 下的文件。
+# 真正的 eval 放在文件末尾 include luci.mk 之后。
 define Download/atomdns-bin
   FILE:=$(ATOMDNS_BIN_FILE)
   URL:=$(ATOMDNS_RELEASE_URL)/$(ATOMDNS_BIN_FILE)
   HASH:=$(ATOMDNS_BIN_HASH)
 endef
-$(eval $(call Download,atomdns-bin))
 
 define Download/atomdns-conf
   FILE:=$(ATOMDNS_CONF_FILE)
   URL:=$(ATOMDNS_RELEASE_URL)/$(ATOMDNS_CONF_FILE)
   HASH:=$(ATOMDNS_CONF_HASH)
 endef
-$(eval $(call Download,atomdns-conf))
 
 # LuCI 元数据：主程序已在本包内，不再依赖 +atomdns。
 # 本包含架构相关二进制，故 LUCI_PKGARCH 留空（不设 all，走目标架构）。
@@ -66,6 +70,8 @@ LUCI_PKGARCH:=
 
 # 以下 define 必须在 include luci.mk 之前：luci.mk 在 include 时会 eval BuildPackage，
 # 之后定义的 description / conffiles / Build/Prepare 钩子都不会被读取。
+# 唯一例外是 Download/xxx：数据可以写在这里，但 $(eval $(call Download,...)) 必须放到
+# include luci.mk 之后（见文件末尾），因为 Download 宏和 $(STAMP_PREPARED) 都还没定义。
 define Package/$(PKG_NAME)/description
  AtomDNS 是 MosDNS 的 Rust 重写版，单静态二进制，支持国内外 DNS 分流、FakeIP、
  路由学习、乐观缓存、DoH/DoT、SRS/geosite 规则与内置 WebUI。
@@ -95,6 +101,15 @@ endef
 
 # luci.mk 会在末尾对 LUCI_BUILD_PACKAGES 执行 BuildPackage，无需再次调用。
 include $(TOPDIR)/feeds/luci/luci.mk
+
+# 下载规则必须在这一行之后 eval：
+# 1) Download 宏由 download.mk 定义，download.mk 被 package.mk 引入，package.mk 直到上一行才 include；
+# 2) $(DOWNLOAD_RDEP) 展开成 $(STAMP_PREPARED)，该变量同样来自 package.mk。
+# 少了这两样，$(call Download,...) 只能生成空依赖。展开后得到
+#   $(STAMP_PREPARED): $(DL_DIR)/atomdns-linux-<arch>.tar.gz $(DL_DIR)/config_rust.zip
+# compile 就会先下载、再解压。
+$(eval $(call Download,atomdns-bin))
+$(eval $(call Download,atomdns-conf))
 
 # ---------------------------------------------------------------------------
 # 下面这一行「注释」不能删，它不是给人看的说明，而是 buildroot 的扫描标记。
