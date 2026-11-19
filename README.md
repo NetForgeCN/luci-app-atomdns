@@ -208,6 +208,12 @@ sha256sum atomdns-linux-amd64-musl.tar.gz config_rust.zip   # 必须与上表一
 s = m.section(form.NamedSection, 'main', 'atomdns', _('运行状态'));
 ```
 
+## 关于「运行状态」区块
+
+早期版本在「服务设置」上方有个「运行状态」区块（服务状态/版本/监听/配置目录），已移除。原因：它走 rpcd 的 `atomdns status` 取数，`pidof`/`uci` 拼出的状态与实际进程并不可靠，且信息在服务设置里已经体现。现在 LuCI 只做配置与操作（启用、端口、配置目录、日志、打开 WebUI、重启），真实运行状态以内置 WebUI 为准。
+
+`rpcd/atomdns` 里的 `status` 方法仍保留（给 ubus 手动调试用），但前端不再调用。
+
 ## 使用
 
 1. 进入 **LuCI → 服务 → AtomDNS**，勾选「启用」。
