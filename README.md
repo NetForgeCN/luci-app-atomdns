@@ -49,21 +49,31 @@ luci-app-atomdns/
 
 ## 安装
 
-把本仓库加入 feed：
+把本仓库加入 feed，**feed 短名用 `atomdns`**（不能带 `-`）：
 
 ```sh
-echo 'src-git luci-app-atomdns https://github.com/NetForgeCN/luci-app-atomdns.git' >> feeds.conf.default
-./scripts/feeds update luci-app-atomdns
-./scripts/feeds install -a -p luci-app-atomdns
+# 先删掉之前那条报错的写法（如果有）
+sed -i '/^src-git luci-app-atomdns /d' feeds.conf.default
+
+echo 'src-git atomdns https://github.com/NetForgeCN/luci-app-atomdns.git' >> feeds.conf.default
+
+./scripts/feeds update atomdns
+./scripts/feeds install -a -p atomdns
 ```
+
+> ⚠️ **feed 短名不能含 `-`**：`scripts/feeds` 用 `(\w+)` 解析 feeds.conf 的 name 段（类型段才是 `([\w\-]+)`），所以 `src-git luci-app-atomdns ...` 会直接报 `Syntax error in feeds.conf.default`。包名 `luci-app-atomdns` 本身带横线没问题——feed 名和包名是两回事。
 
 `make menuconfig` 选中 `LuCI` → `Applications` → `luci-app-atomdns`，然后编译：
 
 ```sh
-make package/luci-app-atomdns/compile V=s
+# 单包编译（feed 装进来的包路径带 feed 名）
+make package/feeds/atomdns/luci-app-atomdns/compile V=s
+
+# 或者整体编译
+make -j$(nproc)
 ```
 
-产物在 `bin/packages/<arch>/`，用 `opkg install` 安装单个 ipk 即可。
+产物在 `bin/packages/<arch>/`（luci 子目录下），用 `opkg install` 安装单个 ipk 即可。装完进 **LuCI → 服务 → AtomDNS** 启用。
 
 ## 使用
 
