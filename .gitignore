@@ -1,0 +1,13 @@
+# OpenWrt build artifacts
+*.ipk
+*.o
+*.so
+-build_dir/
+/staging_dir/
+
+# Editor / OS
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/

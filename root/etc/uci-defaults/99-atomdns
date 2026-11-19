@@ -1,0 +1,14 @@
+#!/bin/sh
+# UCI 默认值：仅在配置缺失时写入，避免覆盖用户改动
+
+uci -q get atomdns.main >/dev/null 2>&1 || {
+	uci set atomdns.main=atomdns
+	uci set atomdns.main.enabled='0'
+	uci set atomdns.main.dns_port='2053'
+	uci set atomdns.main.webui_port='9099'
+	uci set atomdns.main.config_dir='/etc/atomdns'
+	uci set atomdns.main.log_file='/tmp/atomdns.log'
+	uci commit atomdns
+}
+
+exit 0
