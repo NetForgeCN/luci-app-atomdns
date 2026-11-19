@@ -185,6 +185,29 @@ curl -fL -O https://github.com/jasonxtt/atomdns/releases/download/v0.6.6/config_
 sha256sum atomdns-linux-amd64-musl.tar.gz config_rust.zip   # 必须与上表一致
 ```
 
+## LuCI 页面报 `ReferenceError: rpc is not defined`
+
+视图脚本顶部的依赖声明必须是 `'require xxx';`，**不是** `'use xxx';`。LuCI 的加载器（`luci.js`）在加载 view 时用正则
+`/^require[ \t]+(\S+)...$/` 扫描字符串字面量，匹配到的模块才作为函数参数注入；`'use rpc'` 只有 `use strict` 被特殊识别，其余被当普通字符串丢弃，于是 `rpc` / `form` / `view` / `uci` 全是未定义。
+
+正确写法（缺一不可，用到哪个就要 require 哪个）：
+
+```js
+'use strict';
+'require view';
+'require rpc';
+'require uci';
+'require form';
+```
+
+`E()` 与 `_()` 是全局函数，不需要 require。
+
+另一个同源问题：状态区若写成 `m.section(form.TypedSection, '_status', ...)`，`_status` 会被当成 UCI section **类型**去查 `atomdns` 配置，而配置里只有 `config atomdns 'main'`（类型是 `atomdns`），查询返回空数组，整块状态区不渲染。状态区必须映射到真实 section：
+
+```js
+s = m.section(form.NamedSection, 'main', 'atomdns', _('运行状态'));
+```
+
 ## 使用
 
 1. 进入 **LuCI → 服务 → AtomDNS**，勾选「启用」。

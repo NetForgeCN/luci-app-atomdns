@@ -1,5 +1,8 @@
 'use strict';
-'use rpc';
+'require view';
+'require rpc';
+'require uci';
+'require form';
 
 var callStatus = rpc.declare({
 	object: 'atomdns',
@@ -31,8 +34,10 @@ return view.extend({
 			_('Rust 版 DNS 分流器，支持国内外分流、FakeIP、路由学习与内置 WebUI。'));
 
 		// ---------- 运行状态 ----------
-		s = m.section(form.TypedSection, '_status', _('运行状态'));
-		s.anonymous = true;
+		// 必须映射到真实存在的 UCI section（atomdns.main）。
+		// 若用 TypedSection + 不存在的类型（如 _status），cfgsections() 返回空数组，
+		// 该 section 下的所有 DummyValue 都不会渲染，状态区整个消失。
+		s = m.section(form.NamedSection, 'main', 'atomdns', _('运行状态'));
 		s.addremove = false;
 
 		o = s.option(form.DummyValue, '_running', _('服务状态'));
