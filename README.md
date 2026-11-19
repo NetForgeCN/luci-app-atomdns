@@ -137,18 +137,46 @@ $(STAMP_PREPARED): $(DL_DIR)/atomdns-linux-<arch>.tar.gz $(DL_DIR)/config_rust.z
 
 验证方式：`make package/feeds/atomdns/luci-app-atomdns/download V=s` 应看到下载两个文件；或直接 `ls dl/atomdns-* dl/config_rust.zip`。
 
-## 下载 404 / 构建机连不上 GitHub
+## 下载 404：`URL` 只能写到目录
 
-`curl: (22) The requested URL returned error: 404` 后面紧跟 `Download failed.` / `No more mirrors to try - giving up.`，这两句是 `scripts/download.pl` 打的：它会把 `Download/xxx` 里的 URL **和 OpenWrt 官方源镜像**拼成一个列表逐个试，全部失败才退出。GitHub 在中国大陆常因 DNS 污染或代理规则返回 404/超时，这时文件本身没问题，是出口不通。
+```
+curl: (22) The requested URL returned error: 404
+Download failed.
+No more mirrors to try - giving up.
+```
 
-先确认文件本身有效（这两个哈希与 Makefile 中固定的一致，v0.6.6）：
+`Download/xxx` 里的 `URL` 是**镜像目录**，不是文件地址。`scripts/download.pl` 内部是：
+
+```perl
+download_cmd("$mirror/$download_filename", ...)
+```
+
+即它会自己用 `FILE` 拼上文件名。所以把文件名也写进 `URL` 时，真实请求会变成重复拼接：
+
+```
+…/download/v0.6.6/atomdns-linux-amd64-musl.tar.gz/atomdns-linux-amd64-musl.tar.gz   → 404
+```
+
+GitHub 对这种路径就回 404，`download.pl` 再试 OpenWrt 官方源镜像（我们的文件不在那儿，也是 404），最后 `No more mirrors to try`。这也是官方包为什么一律 `PKG_SOURCE_URL:=<目录>` + `PKG_SOURCE:=<文件名>` 分开写。
+
+本包的正确写法：
+
+```make
+ATOMDNS_RELEASE_URL:=https://github.com/jasonxtt/atomdns/releases/download/v$(PKG_VERSION)
+
+define Download/atomdns-bin
+  FILE:=atomdns-linux-amd64-musl.tar.gz   # 文件名放这里
+  URL:=$(ATOMDNS_RELEASE_URL)             # 只写到目录
+  HASH:=5ec815c1…
+endef
+```
+
+**兜底**：网络确实不通时，手动把文件放进 `dl/`，下载规则检测到文件已存在会跳过。哈希必须与 Makefile 中固定的一致（v0.6.6）：
 
 | 文件 | SHA256 |
 |---|---|
 | `atomdns-linux-amd64-musl.tar.gz` | `5ec815c111a934712061a438e0f6b35e520bcdba4ea6b1ab44b479989843d395` |
 | `config_rust.zip` | `88a6332d83ebbe81d01ffcbd622b4afc3901689913a4dca327665ab1e0b0f84b` |
-
-绕过办法：手动把文件放进 `dl/`，下载规则检测到文件已存在就会跳过，之后 `compile` 直接解压。
 
 ```sh
 cd ~/openwrt/dl
@@ -156,8 +184,6 @@ curl -fL -O https://github.com/jasonxtt/atomdns/releases/download/v0.6.6/atomdns
 curl -fL -O https://github.com/jasonxtt/atomdns/releases/download/v0.6.6/config_rust.zip
 sha256sum atomdns-linux-amd64-musl.tar.gz config_rust.zip   # 必须与上表一致
 ```
-
-curl 也 404 时，用代理拉一次即可（`curl -x http://<代理>:<端口> ...`，或在能上网的机器上下好再拷进去）。哈希校验能保证手动放置的文件不会被偷换。
 
 ## 使用
 

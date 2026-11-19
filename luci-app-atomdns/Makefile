@@ -50,15 +50,20 @@ ATOMDNS_BIN_FILE:=atomdns-linux-$(ATOMDNS_BIN_VARIANT).tar.gz
 # luci.mk 里），宏未定义时 $(call Download,x) 展开为空串，$(eval ) 等于空操作，
 # 结果就是「一条下载规则都没生成」——编译时 prepare 直接 tar 找不到 dl/ 下的文件。
 # 真正的 eval 放在文件末尾 include luci.mk 之后。
+# 注意：URL 必须写到「目录」，不能写完整文件地址。
+# download.pl 内部是 download_cmd("$mirror/$download_filename")，会自己拼上 FILE；
+# 若 URL 已经含文件名，实际请求会变成
+#   .../atomdns-linux-amd64-musl.tar.gz/atomdns-linux-amd64-musl.tar.gz  → 404
+# 这也是官方包里 PKG_SOURCE_URL 一律写目录（文件名由 PKG_SOURCE 提供）的原因。
 define Download/atomdns-bin
   FILE:=$(ATOMDNS_BIN_FILE)
-  URL:=$(ATOMDNS_RELEASE_URL)/$(ATOMDNS_BIN_FILE)
+  URL:=$(ATOMDNS_RELEASE_URL)
   HASH:=$(ATOMDNS_BIN_HASH)
 endef
 
 define Download/atomdns-conf
   FILE:=$(ATOMDNS_CONF_FILE)
-  URL:=$(ATOMDNS_RELEASE_URL)/$(ATOMDNS_CONF_FILE)
+  URL:=$(ATOMDNS_RELEASE_URL)
   HASH:=$(ATOMDNS_CONF_HASH)
 endef
 
