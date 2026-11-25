@@ -47,7 +47,7 @@ AtomDNS 是 [jasonxtt/atomdns](https://github.com/jasonxtt/atomdns)（Rust 重�
 ## 构建前提
 
 - 构建主机需装 `unzip`，用于解压官方 `config_rust.zip`；编译树中需已安装 `feeds/luci`（本包包含 `$(TOPDIR)/feeds/luci/luci.mk`）。
-- 两个外部资产 `atomdns-linux-<arch>.tar.gz` 与 `config_rust.zip` 由 `Download/` 规则挂在 `$(STAMP_PREPARED)` 上，编译期自动下载并校验 SHA256，开机不联网拉取。需要提前拉取可执行 `make package/feeds/atomdns/luci-app-atomdns/download`。
+- 两个外部资产 `atomdns-linux-<arch>.tar.gz` 与 `config_rust.zip` 由 `Download/` 规则挂在 `$(STAMP_PREPARED)` 上，编译期自动下载并校验 SHA256，开机不联网拉取。打包前还会检查归档成员路径，拒绝 `..`、绝对路径与盘符路径，避免解压路径穿越。需要提前拉取可执行 `make package/feeds/atomdns/luci-app-atomdns/download`。
 - 支持 **x86_64 / aarch64 / armv7** 目标；其他架构（mips、armv5 / armv6 等）在编译阶段报错终止，不会静默打入不兼容的二进制。
 
 ## 接入与编译
@@ -130,8 +130,11 @@ x86_64 使用官方 `amd64-musl` 静态版（零依赖，适配 OpenWrt 的 musl
 
 - **端口**：9099 是 WebUI 默认端口，一般不与 OpenWrt 组件冲突；被占用时可在 UCI 中修改。
 - **日志**：默认写到 `/tmp/atomdns.log`（内存文件系统）避免占用 flash；需长期留存可改到 `/etc/atomdns/atomdns.log`。
-- **首次初始化**：配置目录非空且缺少 `config_custom.yaml` 时不会自动写文件，避免覆盖已有数据。
+- **首次初始化**：配置目录缺少 `config_custom.yaml` 时只补齐缺失文件，已存在的文件（含用户修改过的规则）绝不覆盖，避免升级丢数据。UCI 中的端口与路径在使用前会做范围/路径校验，写入 `config_custom.yaml` 采用同目录临时文件 + 原子替换，失败时保留原文件。
 - **脚本执行位**：打包钩子会统一设置 init.d、uci-defaults 与 rpcd 插件的可执行位，`uci-defaults` 另有一道开机兜底，保证 rpcd 只加载带 owner 可执行位插件的要求得到满足。
+- **权限分离**：只读会话只能查询 UCI 与 `atomdns status`；`atomdns restart` 需要写权限。rpcd 插件对所有 UCI/版本字符串做 JSON 转义，重启失败会返回 `result: error` 而不是误报成功。
+- **URL 安全**：内置 WebUI 按钮只接受 1-65535 的纯数字端口并校验目标主机与当前页面一致，避免外部构造的 UCI 值造成开放重定向；窗口以 `noopener,noreferrer` 打开。
+- **CI**：`.github/workflows/ci.yml` 在 push / PR 时运行 `sh scripts/check.sh`，校验 shell/JS/JSON/YAML 语法；action 以 commit SHA 固定并仅申请 `contents: read`。
 
 ## 许可证
 
