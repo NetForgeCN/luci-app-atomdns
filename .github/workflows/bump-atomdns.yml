@@ -1,0 +1,38 @@
+name: Bump AtomDNS
+
+on:
+  schedule:
+    # 每天 UTC 03:17 检查上游 release；避开整点降低 GitHub 调度拥塞。
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bump-atomdns
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check upstream release and update files
+        id: bump
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/bump.py --apply
+
+      - name: Commit and push
+        if: steps.bump.outputs.updated == 'true'
+        env:
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add luci-app-atomdns/Makefile README.md
+          git commit -m "chore: 自动升级 AtomDNS 至 ${VERSION}"
+          git push origin HEAD:main

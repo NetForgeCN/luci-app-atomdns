@@ -56,6 +56,19 @@ check_yaml() {
 	done
 }
 
+check_python() {
+	command -v python3 >/dev/null 2>&1 || { echo "FAIL python3 not found" >&2; fail=1; return 0; }
+	for f do
+		# 把 pyc 重定向到缓存目录，保持工作树干净。
+		if PYTHONPYCACHEPREFIX="${TMPDIR:-/tmp}/luci-atomdns-pycache" python3 -m py_compile "$f"; then
+			echo "ok   python3 -m py_compile $f"
+		else
+			echo "FAIL python3 -m py_compile $f" >&2
+			fail=1
+		fi
+	done
+}
+
 check_sh \
 	scripts/check.sh \
 	"$P/root/etc/init.d/atomdns" \
@@ -68,7 +81,9 @@ check_json \
 	"$P/root/usr/share/luci/menu.d/luci-app-atomdns.json" \
 	"$P/root/usr/share/rpcd/acl.d/luci-app-atomdns.json"
 
-check_yaml .github/workflows/ci.yml
+check_python scripts/bump.py
+
+check_yaml .github/workflows/ci.yml .github/workflows/bump-atomdns.yml
 
 [ "$fail" -eq 0 ] || { echo "static checks failed" >&2; exit 1; }
 echo "all static checks passed"

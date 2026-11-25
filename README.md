@@ -48,6 +48,7 @@ AtomDNS 是 [jasonxtt/atomdns](https://github.com/jasonxtt/atomdns)（Rust 重�
 
 - 构建主机需装 `unzip`，用于解压官方 `config_rust.zip`；编译树中需已安装 `feeds/luci`（本包包含 `$(TOPDIR)/feeds/luci/luci.mk`）。
 - 两个外部资产 `atomdns-linux-<arch>.tar.gz` 与 `config_rust.zip` 由 `Download/` 规则挂在 `$(STAMP_PREPARED)` 上，编译期自动下载并校验 SHA256，开机不联网拉取。打包前还会检查归档成员路径，拒绝 `..`、绝对路径与盘符路径，避免解压路径穿越。需要提前拉取可执行 `make package/feeds/atomdns/luci-app-atomdns/download`。
+- 版本与 HASH 由 `.github/workflows/bump-atomdns.yml` 每日检查上游 release 后自动更新；URL 中的 `v$(PKG_VERSION)` 随版本自动变化，无需单独维护。任一资产缺失、下载失败、大小不符或哈希与上游清单冲突时中止，保留旧值并记录日志（fail closed）。
 - 支持 **x86_64 / aarch64 / armv7** 目标；其他架构（mips、armv5 / armv6 等）在编译阶段报错终止，不会静默打入不兼容的二进制。
 
 ## 接入与编译
@@ -134,7 +135,9 @@ x86_64 使用官方 `amd64-musl` 静态版（零依赖，适配 OpenWrt 的 musl
 - **脚本执行位**：打包钩子会统一设置 init.d、uci-defaults 与 rpcd 插件的可执行位，`uci-defaults` 另有一道开机兜底，保证 rpcd 只加载带 owner 可执行位插件的要求得到满足。
 - **权限分离**：只读会话只能查询 UCI 与 `atomdns status`；`atomdns restart` 需要写权限。rpcd 插件对所有 UCI/版本字符串做 JSON 转义，重启失败会返回 `result: error` 而不是误报成功。
 - **URL 安全**：内置 WebUI 按钮只接受 1-65535 的纯数字端口并校验目标主机与当前页面一致，避免外部构造的 UCI 值造成开放重定向；窗口以 `noopener,noreferrer` 打开。
-- **CI**：`.github/workflows/ci.yml` 在 push / PR 时运行 `sh scripts/check.sh`，校验 shell/JS/JSON/YAML 语法；action 以 commit SHA 固定并仅申请 `contents: read`。
+- **自动升级**：`.github/workflows/bump-atomdns.yml` 每日（或手动触发）运行 `python3 scripts/bump.py --apply`，从 Makefile 的 `ATOMDNS_RELEASE_URL` 推导上游仓库，检查最新 release 的四个必需资产（amd64-musl / arm64 / armv7 二进制与 `config_rust.zip`），直接下载计算 SHA256 并与上游更新清单交叉校验，然后更新 `PKG_VERSION`、全部 HASH 与 README 版本说明并提交到 main。无新版本时输出 `no update`，不产生提交。
+- **本地 dry-run**：`python3 scripts/bump.py` 默认不写文件，只打印检测结果；确认无误后再用 `python3 scripts/bump.py --apply` 实际更新。网络失败或校验不通过时脚本以非零码退出并说明原因，绝不留下半更新状态。
+- **CI**：`.github/workflows/ci.yml` 在 push / PR 时运行 `sh scripts/check.sh`，校验 shell/Python/JS/JSON/YAML 语法；action 以 commit SHA 固定并仅申请 `contents: read`。
 
 ## 许可证
 
