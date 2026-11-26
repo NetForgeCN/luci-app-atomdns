@@ -2,7 +2,7 @@
 
 AtomDNS 的一体化 OpenWrt 包：主程序二进制、默认配置、内置 WebUI 与 LuCI 控制面板打包在同一个 ipk 里，装完即可用。
 
-AtomDNS 是 [jasonxtt/atomdns](https://github.com/jasonxtt/atomdns)（Rust 重写的 MosDNS），单静态二进制，支持国内外 DNS 分流、FakeIP、路由学习、乐观缓存、DoH/DoT、SRS/geosite 规则与内置 WebUI。本包对应上游版本 **v0.6.6**。
+AtomDNS 是 [jasonxtt/atomdns](https://github.com/jasonxtt/atomdns)（Rust 重写的 MosDNS），单静态二进制，支持国内外 DNS 分流、FakeIP、路由学习、乐观缓存、DoH/DoT、SRS/geosite 规则与内置 WebUI。本包对应上游版本 **v0.7.1**。
 
 ## 功能
 
