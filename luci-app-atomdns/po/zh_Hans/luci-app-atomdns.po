@@ -1,0 +1,73 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: luci-app-atomdns\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-26 22:40+0800\n"
+"PO-Revision-Date: 2026-11-26 22:40+0800\n"
+"Last-Translator: firker\n"
+"Language-Team: Chinese (Simplified)\n"
+"Language: zh_Hans\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "A Rust DNS splitter with domestic/overseas routing, FakeIP, route learning and a built-in WebUI."
+msgstr "Rust 编写的 DNS 分流器，支持国内/国外路由分流、FakeIP、路由学习，并内置 WebUI。"
+
+msgid "AtomDNS"
+msgstr "AtomDNS"
+
+msgid "Built-in management port, 9099 by default. Restart the service and use the button below after changing it."
+msgstr "内置管理端口，默认 9099。修改后请重启服务，再使用下方按钮打开。"
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "Configuration directory"
+msgstr "配置目录"
+
+msgid "DNS listen port"
+msgstr "DNS 监听端口"
+
+msgid "Default 2053 to avoid dnsmasq on port 53. Disable the dnsmasq DNS listener first before taking over port 53."
+msgstr "默认 2053，避免与 dnsmasq 的 53 端口冲突。若要接管 53 端口，请先关闭 dnsmasq 的 DNS 监听。"
+
+msgid "Enabled"
+msgstr "已启用"
+
+msgid "Initialised from the bundled config package on first start; rules, cache and learned data are stored here."
+msgstr "首次启动时从随附配置包初始化；规则、缓存与学习数据都存放在此目录。"
+
+msgid "Invalid WebUI URL"
+msgstr "WebUI URL 无效"
+
+msgid "Invalid WebUI host"
+msgstr "WebUI 地址无效"
+
+msgid "Invalid WebUI port"
+msgstr "WebUI 端口无效"
+
+msgid "Log file"
+msgstr "日志文件"
+
+msgid "Open WebUI"
+msgstr "打开 WebUI"
+
+msgid "Operation failed"
+msgstr "操作失败"
+
+msgid "Restart service"
+msgstr "重启服务"
+
+msgid "Run under procd and start on boot when enabled; no ports are bound when disabled."
+msgstr "启用后由 procd 托管并开机自启；关闭时不占用任何端口。"
+
+msgid "Service settings"
+msgstr "服务设置"
+
+msgid "The built-in WebUI requires a running service and browser access to this port on the router."
+msgstr "内置 WebUI 需要服务处于运行状态，且浏览器能访问路由器上的该端口。"
+
+msgid "WebUI port"
+msgstr "WebUI 端口"
